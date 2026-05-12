@@ -58,10 +58,10 @@ export async function searchMemories({
   return memories;
 }
 
-export async function decideAndStoreMemory(userId: string, content: string) {
+export async function decideAndStoreMemory(userId: string, content: string, context?: string) {
   try {
     const prompt = `
-      Analyze the following message and decide if it contains meaningful long-term information about the user.
+      Analyze the following interaction and decide if it contains meaningful long-term information about the user.
       Information worth storing includes:
       - Personality traits
       - Preferences (likes, dislikes)
@@ -80,7 +80,8 @@ export async function decideAndStoreMemory(userId: string, content: string) {
       If not worth storing, respond with:
       { "shouldStore": false }
       
-      Message: "${content}"
+      ${context ? `CONTEXT:\n${context}\n` : ""}
+      MESSAGE: "${content}"
     `;
 
     const response = await openai.chat.completions.create({

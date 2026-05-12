@@ -1,23 +1,26 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { getOrCreateUser } from "@/lib/user-utils";
 import { searchMemories, decideAndStoreMemory } from "@/lib/memory";
 import { getUserPersonality } from "@/lib/personality";
 import { generateChatResponse } from "@/lib/openai";
 import { db } from "@/lib/db";
+import { cache } from "@/lib/cache";
 
 export async function POST(req: Request) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-    
     const user = await getOrCreateUser();
     const { message, conversationId } = await req.json();
 
     if (!message) {
       return new NextResponse("Message is required", { status: 400 });
+    }
+
+    // 0. Check cache for recent identical request from this user
+    const cacheKey = `ai_response:${user.id}:${Buffer.from(message).toString("base64").substring(0, 100)}`;
+    const cachedResponse = cache.get<{ content: string; conversationId: string }>(cacheKey);
+    
+    if (cachedResponse && cachedResponse.conversationId === conversationId) {
+      return NextResponse.json(cachedResponse);
     }
 
     // 1. Retrieve relevant memories
@@ -94,13 +97,24 @@ export async function POST(req: Request) {
     });
 
     // 8. Background task: Decide if user message should be a memory
-    // We don't await this to keep response time low
-    decideAndStoreMemory(user.id, message).catch(err => console.error("Memory storage error:", err));
+    // We await this to ensure memories are actually stored in the database
+    // We provide history as context so the AI can understand short messages
+    try {
+      const chatContext = history.slice(-3).map(m => `${m.role}: ${m.content}`).join("\n");
+      await decideAndStoreMemory(user.id, message, chatContext);
+    } catch (err) {
+      console.error("Memory storage error:", err);
+    }
 
-    return NextResponse.json({
+    const result = {
       content: assistantMessage,
       conversationId: currentConversationId,
-    });
+    };
+
+    // 9. Cache the response (TTL: 5 minutes)
+    cache.set(cacheKey, result, 5 * 60 * 1000);
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error("[CHAT_ERROR]", error);
     return new NextResponse("Internal Server Error", { status: 500 });

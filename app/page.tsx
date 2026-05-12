@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { Brain, ArrowRight, Shield, Zap, Target } from "lucide-react";
-import { SignInButton, SignUpButton, Show, UserButton } from "@clerk/nextjs";
+import { getCurrentUser } from "@/lib/auth/get-user";
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const user = await getCurrentUser();
+
   return (
     <div className="flex flex-col min-h-screen">
       <header className="px-4 lg:px-6 h-14 flex items-center border-b">
@@ -11,16 +13,22 @@ export default function LandingPage() {
           <span className="ml-2 text-xl font-bold">TwinMind</span>
         </Link>
         <nav className="ml-auto flex gap-4 sm:gap-6 items-center">
-          <Show when="signed-out">
-            <SignInButton mode="modal"><button className="text-sm font-medium hover:underline underline-offset-4">Login</button></SignInButton>
-            <SignUpButton mode="modal"><button className="text-sm font-medium hover:underline underline-offset-4">Get Started</button></SignUpButton>
-          </Show>
-          <Show when="signed-in">
-            <Link href="/dashboard" className="text-sm font-medium hover:underline underline-offset-4 mr-4">
-              Dashboard
-            </Link>
-            <UserButton afterSignOutUrl="/" />
-          </Show>
+          {!user ? (
+            <>
+              <Link href="/sign-in" className="text-sm font-medium hover:underline underline-offset-4">Login</Link>
+              <Link href="/sign-up" className="text-sm font-medium hover:underline underline-offset-4">Get Started</Link>
+            </>
+          ) : (
+            <>
+              <Link href="/dashboard" className="text-sm font-medium hover:underline underline-offset-4 mr-4">
+                Dashboard
+              </Link>
+              {/* Custom User Profile dropdown could go here */}
+              <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-white text-xs font-bold">
+                {user.name?.charAt(0) || "U"}
+              </div>
+            </>
+          )}
         </nav>
       </header>
       <main className="flex-1">
@@ -37,20 +45,19 @@ export default function LandingPage() {
                 </p>
               </div>
               <div className="space-x-4">
-                <Show when="signed-out">
-                  <SignUpButton mode="modal">
+                {!user ? (
+                  <Link href="/sign-up">
                     <button className="inline-flex items-center justify-center rounded-md bg-violet-600 px-8 py-3 text-sm font-medium text-white shadow transition-colors hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-700">
                       Create Your Twin <ArrowRight className="ml-2 h-4 w-4" />
                     </button>
-                  </SignUpButton>
-                </Show>
-                <Show when="signed-in">
+                  </Link>
+                ) : (
                   <Link href="/dashboard">
                     <button className="inline-flex items-center justify-center rounded-md bg-violet-600 px-8 py-3 text-sm font-medium text-white shadow transition-colors hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-700">
                       Go to Dashboard <ArrowRight className="ml-2 h-4 w-4" />
                     </button>
                   </Link>
-                </Show>
+                )}
               </div>
             </div>
           </div>

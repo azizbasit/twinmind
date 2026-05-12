@@ -29,12 +29,19 @@ export default function UploadPage() {
 
     try {
       const response = await axios.post("/api/upload", formData);
-      setStatus("success");
-      setMessage(response.data.message);
-      setFile(null);
-    } catch (error) {
+      if (response.data.success) {
+        setStatus("success");
+        setMessage(response.data.message);
+        setFile(null);
+      } else {
+        setStatus("error");
+        setMessage(response.data.error || "Failed to upload document.");
+      }
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      const errorMessage = error.response?.data?.error || "Failed to upload document. Please try again.";
       setStatus("error");
-      setMessage("Failed to upload document. Please try again.");
+      setMessage(errorMessage);
     } finally {
       setIsUploading(false);
     }
@@ -80,7 +87,7 @@ export default function UploadPage() {
               {file ? file.name : "Click to select a file"}
             </p>
             <p className="text-sm text-slate-500">
-              Supports .txt, .md (PDF coming soon)
+              Supports .txt, .md, and .pdf
             </p>
           </div>
         </label>

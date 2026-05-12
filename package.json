@@ -8,25 +8,38 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "seed": "tsx prisma/seed.ts"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
-    "@clerk/nextjs": "latest",
     "@prisma/client": "^6.2.1",
     "@tailwindcss/postcss": "^4.3.0",
     "axios": "latest",
+    "bcrypt": "^6.0.0",
     "clsx": "latest",
+    "cookie": "^1.1.1",
     "date-fns": "latest",
+    "jose": "^6.2.3",
+    "jsonwebtoken": "^9.0.3",
     "lucide-react": "latest",
     "next": "latest",
     "next-themes": "latest",
     "openai": "latest",
+    "pdf-parse": "^2.4.5",
     "react": "latest",
     "react-dom": "latest",
-    "tailwind-merge": "latest"
+    "tailwind-merge": "latest",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/cookie": "^0.6.0",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "latest",
+    "@types/pdf-parse": "^1.1.5",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "autoprefixer": "latest",

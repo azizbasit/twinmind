@@ -1,27 +1,14 @@
-import { auth, currentUser } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth/get-user";
 
 export async function getOrCreateUser() {
-  const { userId: clerkId } = await auth();
-  const user = await currentUser();
+  const user = await getCurrentUser();
 
-  if (!clerkId || !user) {
+  if (!user) {
     throw new Error("Unauthorized");
   }
 
-  let dbUser = await db.user.findUnique({
-    where: { clerkId },
-  });
-
-  if (!dbUser) {
-    dbUser = await db.user.create({
-      data: {
-        clerkId,
-        email: user.emailAddresses[0].emailAddress,
-        name: `${user.firstName} ${user.lastName}`,
-      },
-    });
-  }
-
-  return dbUser;
+  // With custom auth, the user is already in the DB and verified.
+  // We just return the user object we got from getCurrentUser.
+  return user;
 }

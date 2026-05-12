@@ -8,7 +8,7 @@ TwinMind is a production-ready AI platform that learns from everything you provi
 - **Backend**: Next.js API Routes
 - **Database**: PostgreSQL with `pgvector` extension
 - **ORM**: Prisma
-- **Auth**: Clerk
+- **Auth**: Custom JWT Authentication with in-memory cache
 - **AI**: OpenAI (GPT-4o, text-embedding-3-small)
 
 ## Getting Started
@@ -25,8 +25,8 @@ Create a `.env` file in the root directory:
 ```env
 DATABASE_URL="postgresql://user:password@localhost:5432/twinmind?schema=public"
 
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
-CLERK_SECRET_KEY=sk_test_...
+JWT_SECRET="your_jwt_secret"
+JWT_REFRESH_SECRET="your_refresh_secret"
 
 OPENAI_API_KEY=sk-...
 
