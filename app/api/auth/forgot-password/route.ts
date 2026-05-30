@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { forgotPasswordSchema } from "@/lib/validations/auth";
 import { getUserByEmail } from "@/lib/auth/user";
+import { sendPasswordResetEmail } from "@/lib/email";
 
 export async function POST(req: Request) {
   try {
@@ -23,8 +24,11 @@ export async function POST(req: Request) {
       },
     });
 
-    // TODO: Send reset email with token
-    console.log(`Reset link: ${process.env.NEXT_PUBLIC_APP_URL}/reset-password?token=${token}`);
+    try {
+      await sendPasswordResetEmail(user.email, token);
+    } catch (emailErr) {
+      console.error("[FORGOT_PASSWORD_EMAIL_ERROR]", emailErr);
+    }
 
     return NextResponse.json({ message: "If an account exists, a reset link has been sent." });
   } catch (error: any) {

@@ -31,7 +31,9 @@
     "pdf-parse": "^2.4.5",
     "react": "latest",
     "react-dom": "latest",
+    "resend": "^6.12.4",
     "tailwind-merge": "latest",
+    "twitter-api-v2": "^1.29.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

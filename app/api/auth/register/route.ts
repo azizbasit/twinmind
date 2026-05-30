@@ -3,6 +3,7 @@ import { hashPassword } from "@/lib/auth/password";
 import { db } from "@/lib/db";
 import { registerSchema } from "@/lib/validations/auth";
 import { getUserByEmail, getDefaultRole } from "@/lib/auth/user";
+import { sendVerificationEmail } from "@/lib/email";
 
 export async function POST(req: Request) {
   try {
@@ -47,7 +48,11 @@ export async function POST(req: Request) {
       },
     });
 
-    // TODO: Send verification email
+    try {
+      await sendVerificationEmail(user.email, verificationToken);
+    } catch (emailErr) {
+      console.error("[REGISTER_EMAIL_ERROR]", emailErr);
+    }
 
     return NextResponse.json(
       { message: "User registered successfully. Please verify your email." },

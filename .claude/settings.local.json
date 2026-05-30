@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npx prisma *)",
+      "Bash(npx tsc *)",
+      "Bash(npm --version)",
+      "Bash(npx tsx *)",
+      "Bash(npm run *)",
+      "Bash(taskkill /PID 34116 /F)",
+      "PowerShell(Stop-Process -Id 34116 -Force 2>&1)",
+      "PowerShell(ls -R \"c:\\\\laragon\\\\www\\\\twinmind\\\\app\" -ErrorAction SilentlyContinue)",
+      "PowerShell(head -50)",
+      "Bash(Remove-Item -Recurse -Force .next -ErrorAction SilentlyContinue)",
+      "Bash(Write-Host \"Done\")",
+      "Bash(node -e \"const l = require\\('./node_modules/lucide-react'\\); ['Mic','MicOff','Loader2','CheckCircle','AlertCircle','Zap','Trash2','Upload','Volume2','Square','RefreshCw'].forEach\\(n => console.log\\(n, !!l[n]\\)\\)\")",
+      "Bash(mysql -u root -e \"CREATE DATABASE IF NOT EXISTS twinmind CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\")",
+      "PowerShell(& \"C:\\\\laragon\\\\bin\\\\mysql\\\\mysql-8.0.30-winx64\\\\bin\\\\mysql.exe\" -u root -e \"CREATE DATABASE IF NOT EXISTS twinmind CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\")"
+    ]
+  }
+}

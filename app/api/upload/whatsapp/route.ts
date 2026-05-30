@@ -1,0 +1,51 @@
+import { NextResponse } from "next/server";
+import { getOrCreateUser } from "@/lib/user-utils";
+import { parseWhatsAppExport, extractUserMessages, extractAllSenders } from "@/lib/whatsapp-parser";
+import { batchExtractMemories } from "@/lib/memory";
+
+export async function POST(req: Request) {
+  try {
+    const user = await getOrCreateUser();
+    const formData = await req.formData();
+    const file = formData.get("file") as File | null;
+    const userName = (formData.get("userName") as string | null) ?? "";
+
+    if (!file) {
+      return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+    }
+
+    const raw = await file.text();
+    const allMessages = parseWhatsAppExport(raw);
+
+    if (allMessages.length === 0) {
+      return NextResponse.json({ error: "Could not parse any messages from this file. Make sure it is a WhatsApp exported .txt file." }, { status: 400 });
+    }
+
+    const senders = extractAllSenders(allMessages);
+
+    // If userName not provided, return senders list so user can pick
+    if (!userName) {
+      return NextResponse.json({ needsSender: true, senders, totalMessages: allMessages.length });
+    }
+
+    const userMessages = extractUserMessages(allMessages, userName);
+
+    if (userMessages.length === 0) {
+      return NextResponse.json({ error: `No messages found for sender "${userName}"` }, { status: 400 });
+    }
+
+    // Join messages into a single text block for memory extraction
+    const text = userMessages.join("\n");
+    const memoriesExtracted = await batchExtractMemories(user.id, text, "WhatsApp conversation");
+
+    return NextResponse.json({
+      success: true,
+      totalMessages: allMessages.length,
+      yourMessages: userMessages.length,
+      memoriesExtracted,
+    });
+  } catch (error) {
+    console.error("[UPLOAD_WHATSAPP_ERROR]", error);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+  }
+}

@@ -2,6 +2,17 @@ import { db } from "@/lib/db";
 import { getEmbeddings, openai } from "@/lib/openai";
 import { MemoryType } from "@prisma/client";
 
+function cosineSimilarity(a: number[], b: number[]): number {
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  return denom === 0 ? 0 : dot / denom;
+}
+
 export async function saveMemory({
   userId,
   content,
@@ -15,16 +26,15 @@ export async function saveMemory({
 }) {
   const embedding = await getEmbeddings(content);
 
-  // We use raw SQL to insert the vector because Prisma's support is limited for insertion
-  await db.$executeRawUnsafe(
-    `INSERT INTO "Memory" ("id", "userId", "content", "embedding", "type", "importanceScore", "updatedAt")
-     VALUES (gen_random_uuid()::text, $1, $2, $3::vector, $4::"MemoryType", $5, NOW())`,
-    userId,
-    content,
-    `[${embedding.join(",")}]`,
-    type,
-    importanceScore
-  );
+  await db.memory.create({
+    data: {
+      userId,
+      content,
+      embedding: JSON.stringify(embedding),
+      type,
+      importanceScore,
+    },
+  });
 }
 
 export async function searchMemories({
@@ -38,24 +48,39 @@ export async function searchMemories({
   limit?: number;
   minImportance?: number;
 }) {
-  const embedding = await getEmbeddings(query);
-  const vectorStr = `[${embedding.join(",")}]`;
+  const queryEmbedding = await getEmbeddings(query);
 
-  // Perform cosine similarity search using pgvector
-  // Cosine distance is (1 - cosine similarity), so we order by distance ASC
-  const memories = await db.$queryRawUnsafe<any[]>(
-    `SELECT id, content, type, "importanceScore", 1 - (embedding <=> $1::vector) as similarity
-     FROM "Memory"
-     WHERE "userId" = $2 AND "importanceScore" >= $3
-     ORDER BY embedding <=> $1::vector
-     LIMIT $4`,
-    vectorStr,
-    userId,
-    minImportance,
-    limit
-  );
+  const memories = await db.memory.findMany({
+    where: {
+      userId,
+      importanceScore: { gte: minImportance },
+      embedding: { not: null },
+    },
+    select: { id: true, content: true, type: true, importanceScore: true, embedding: true },
+  });
 
-  return memories;
+  return memories
+    .map((m) => {
+      const emb: number[] = JSON.parse(m.embedding!);
+      return { id: m.id, content: m.content, type: m.type, importanceScore: m.importanceScore, similarity: cosineSimilarity(queryEmbedding, emb) };
+    })
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, limit);
+}
+
+export async function batchExtractMemories(userId: string, text: string, sourceLabel: string): Promise<number> {
+  const chunkSize = 800;
+  const chunks: string[] = [];
+  for (let i = 0; i < text.length; i += chunkSize) {
+    chunks.push(text.slice(i, i + chunkSize));
+  }
+
+  let stored = 0;
+  for (const chunk of chunks.slice(0, 20)) {
+    const result = await decideAndStoreMemory(userId, `${sourceLabel}: ${chunk}`);
+    if (result) stored++;
+  }
+  return stored;
 }
 
 export async function decideAndStoreMemory(userId: string, content: string, context?: string) {
@@ -69,7 +94,7 @@ export async function decideAndStoreMemory(userId: string, content: string, cont
       - Behavioral patterns
       - Goals or aspirations
       - Significant events
-      
+
       If it's worth storing, respond with a JSON object:
       {
         "shouldStore": true,
@@ -79,7 +104,7 @@ export async function decideAndStoreMemory(userId: string, content: string, cont
       }
       If not worth storing, respond with:
       { "shouldStore": false }
-      
+
       ${context ? `CONTEXT:\n${context}\n` : ""}
       MESSAGE: "${content}"
     `;

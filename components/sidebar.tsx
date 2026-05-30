@@ -2,40 +2,22 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, MessageSquare, Brain, Upload, Settings, LogOut } from "lucide-react";
+import {
+  LayoutDashboard, MessageSquare, Brain, Upload, Settings,
+  LogOut, Mic, Sparkles, BarChart2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import axios from "axios";
 
 const routes = [
-  {
-    label: "Dashboard",
-    icon: LayoutDashboard,
-    href: "/dashboard",
-    color: "text-sky-500",
-  },
-  {
-    label: "Chat",
-    icon: MessageSquare,
-    href: "/chat",
-    color: "text-violet-500",
-  },
-  {
-    label: "Memories",
-    icon: Brain,
-    href: "/memories",
-    color: "text-pink-700",
-  },
-  {
-    label: "Upload",
-    icon: Upload,
-    href: "/upload",
-    color: "text-orange-700",
-  },
-  {
-    label: "Settings",
-    icon: Settings,
-    href: "/settings",
-  },
+  { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", color: "text-sky-500" },
+  { label: "Chat", icon: MessageSquare, href: "/chat", color: "text-violet-500" },
+  { label: "Voice Journal", icon: Mic, href: "/voice", color: "text-red-400" },
+  { label: "Memories", icon: Brain, href: "/memories", color: "text-pink-500" },
+  { label: "Upload", icon: Upload, href: "/upload", color: "text-orange-500" },
+  { label: "Persona", icon: Sparkles, href: "/persona", color: "text-purple-400" },
+  { label: "Analytics", icon: BarChart2, href: "/analytics", color: "text-sky-400" },
+  { label: "Settings", icon: Settings, href: "/settings", color: "text-slate-400" },
 ];
 
 export function Sidebar() {
@@ -55,8 +37,10 @@ export function Sidebar() {
   return (
     <div className="space-y-4 py-4 flex flex-col h-full bg-[#111827] text-white">
       <div className="px-3 py-2 flex-1">
-        <Link href="/dashboard" className="flex items-center pl-3 mb-14">
-          <h1 className="text-2xl font-bold">TwinMind</h1>
+        <Link href="/dashboard" className="flex items-center pl-3 mb-10">
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-violet-400 to-purple-300 bg-clip-text text-transparent">
+            TwinMind
+          </h1>
         </Link>
         <div className="space-y-1">
           {routes.map((route) => (
