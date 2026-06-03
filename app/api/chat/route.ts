@@ -6,6 +6,28 @@ import { openai } from "@/lib/openai";
 import { db } from "@/lib/db";
 import { cache } from "@/lib/cache";
 
+// Build a persona-aware section for the system prompt from stored profile scores
+function buildPersonaSection(profile: any | null, personalityStyle: string): string {
+  if (!profile) return `PERSONALITY PROFILE:\n${personalityStyle}`;
+  return `PERSONA PROFILE (scores 0-100):
+Communication — formality:${profile.formalityScore}, humor:${profile.humorScore}, directness:${profile.directnessScore}, technical:${profile.technicalDepthScore}
+Thinking — analytical:${profile.analyticalScore}, creative:${profile.creativeScore}, strategic:${profile.strategicScore}, emotional:${profile.emotionalScore}
+Decisions — data-driven:${profile.dataOrientedScore}, intuitive:${profile.intuitiveScore}, risk-tolerance:${profile.riskToleranceScore}
+Work — builder:${profile.builderScore}, planner:${profile.plannerScore}, researcher:${profile.researcherScore}, creator:${profile.creatorScore}
+Social — leadership:${profile.leadershipScore}, collaboration:${profile.collaborationScore}, introversion:${profile.introversionScore}
+${profile.summaryText ? `\nNARRATIVE: ${profile.summaryText}` : ""}`.trim();
+}
+
+// Build relationship context string for the system prompt
+function buildRelationshipSection(contacts: any[]): string {
+  if (contacts.length === 0) return "";
+  const lines = contacts.map((c: any) => {
+    const sentiment = c.sentimentScore > 0.3 ? "positive" : c.sentimentScore < -0.2 ? "tension" : "neutral";
+    return `- ${c.name} (${c.relationshipType ?? "contact"}, ${sentiment} relationship)${c.communicationNotes ? `: ${c.communicationNotes}` : ""}`;
+  });
+  return `KEY RELATIONSHIPS:\n${lines.join("\n")}`;
+}
+
 export async function POST(req: Request) {
   try {
     const user = await getOrCreateUser();
@@ -15,54 +37,58 @@ export async function POST(req: Request) {
       return new NextResponse("Message is required", { status: 400 });
     }
 
-    // 1. Retrieve relevant memories
-    const relevantMemories = await searchMemories({
-      userId: user.id,
-      query: message,
-      limit: 5,
-    });
+    // Fetch context in parallel — DB queries are fast, only searchMemories hits OpenAI
+    const [relevantMemories, personalityStyle, personaProfile, importantContacts] =
+      await Promise.all([
+        searchMemories({ userId: user.id, query: message, limit: 5 }),
+        getUserPersonality(user.id),
+        db.personaProfile.findUnique({ where: { userId: user.id } }),
+        db.contact.findMany({
+          where: { userId: user.id, importanceScore: { gte: 0.5 } },
+          orderBy: { importanceScore: "desc" },
+          take: 8,
+          select: { name: true, relationshipType: true, sentimentScore: true, communicationNotes: true },
+        }),
+      ]);
 
-    // 2. Retrieve user personality style
-    const personalityStyle = await getUserPersonality(user.id);
+    const memoryContext =
+      relevantMemories.length > 0
+        ? `RELEVANT MEMORIES:\n${relevantMemories
+            .map(m => `- [${m.type}, confidence:${Math.round(m.confidenceScore * 100)}%] ${m.content}`)
+            .join("\n")}`
+        : "No specific relevant memories yet.";
 
-    // 3. Build system prompt
-    const memoryContext = relevantMemories.length > 0
-      ? `Relevant memories about the user:\n${relevantMemories.map(m => `- ${m.content}`).join("\n")}`
-      : "No specific relevant memories found.";
+    const personaSection = buildPersonaSection(personaProfile, personalityStyle);
+    const relationshipSection = buildRelationshipSection(importantContacts);
 
-    const systemPrompt = `
-You are the Personal AI Digital Twin of the user.
-Your goal is to represent the user accurately, thinking and responding as they would.
+    const systemPrompt = `You are the Personal AI Digital Twin of the user.
+Your goal is to represent them accurately — thinking, reasoning, and responding exactly as they would.
 
-USER PERSONALITY PROFILE:
-${personalityStyle}
+${personaSection}
 
-USER MEMORY CONTEXT:
 ${memoryContext}
+${relationshipSection ? `\n${relationshipSection}` : ""}
 
-INSTRUCTIONS:
-- Respond in the user's communication style.
-- Use the provided memories to give personalized and context-aware responses.
-- Be the "TwinMind" - a reflection of the user's digital consciousness.
-    `.trim();
+RESPONSE PRINCIPLES:
+- Mirror the user's communication style (formality, humor, directness, message length)
+- Ground responses in their known preferences, goals, and values from memory
+- When referencing relationships, match the user's emotional tone toward each person
+- Be authentic to their personality — not generic or overly helpful`.trim();
 
-    // 4. Get or create conversation
+    // Get or create conversation
     let currentConversationId = conversationId;
     let history: { role: string; content: string }[] = [];
 
     if (currentConversationId) {
-      const messages = await db.message.findMany({
+      const msgs = await db.message.findMany({
         where: { conversationId: currentConversationId },
         orderBy: { createdAt: "asc" },
         take: 10,
       });
-      history = messages.map(m => ({ role: m.role, content: m.content }));
+      history = msgs.map(m => ({ role: m.role, content: m.content }));
     } else {
       const newConv = await db.conversation.create({
-        data: {
-          userId: user.id,
-          title: message.substring(0, 50),
-        },
+        data: { userId: user.id, title: message.substring(0, 50) },
       });
       currentConversationId = newConv.id;
     }
@@ -73,7 +99,7 @@ INSTRUCTIONS:
       { role: "user", content: message },
     ];
 
-    // 5a. Streaming response
+    // ── Streaming response (default) ──────────────────────────────────────────
     if (wantStream) {
       const encoder = new TextEncoder();
       let fullResponse = "";
@@ -88,7 +114,6 @@ INSTRUCTIONS:
               temperature: 0.7,
             });
 
-            // First chunk: send conversationId so client can store it
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({ type: "meta", conversationId: currentConversationId })}\n\n`)
             );
@@ -106,7 +131,7 @@ INSTRUCTIONS:
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`));
             controller.close();
 
-            // Persist messages + extract memories after stream closes
+            // Persist messages after stream closes
             await db.message.createMany({
               data: [
                 { conversationId: currentConversationId, role: "user", content: message },
@@ -114,9 +139,10 @@ INSTRUCTIONS:
               ],
             });
 
+            // Async memory extraction — never blocks the user
             const chatContext = history.slice(-3).map(m => `${m.role}: ${m.content}`).join("\n");
-            decideAndStoreMemory(user.id, message, chatContext).catch(err =>
-              console.error("Memory storage error:", err)
+            decideAndStoreMemory(user.id, message, chatContext, "CHAT").catch(err =>
+              console.error("Memory extraction error:", err)
             );
           } catch (err) {
             controller.error(err);
@@ -133,7 +159,7 @@ INSTRUCTIONS:
       });
     }
 
-    // 5b. Non-streaming (fallback, also used by voice page)
+    // ── Non-streaming fallback ─────────────────────────────────────────────────
     const cacheKey = `ai_response:${user.id}:${Buffer.from(message).toString("base64").substring(0, 100)}`;
     const cached = cache.get<{ content: string; conversationId: string }>(cacheKey);
     if (cached && cached.conversationId === conversationId) return NextResponse.json(cached);
@@ -154,8 +180,8 @@ INSTRUCTIONS:
     });
 
     const chatContext = history.slice(-3).map(m => `${m.role}: ${m.content}`).join("\n");
-    decideAndStoreMemory(user.id, message, chatContext).catch(err =>
-      console.error("Memory storage error:", err)
+    decideAndStoreMemory(user.id, message, chatContext, "CHAT").catch(err =>
+      console.error("Memory extraction error:", err)
     );
 
     const result = { content: assistantMessage, conversationId: currentConversationId };

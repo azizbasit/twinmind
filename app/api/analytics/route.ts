@@ -15,6 +15,10 @@ export async function GET() {
       draftCountsRaw,
       integrations,
       recentMemories,
+      uploadedDocuments,
+      importedChats,
+      contactsCount,
+      personaProfile,
     ] = await Promise.all([
       db.memory.count({ where: { userId: user.id } }),
       db.conversation.count({ where: { userId: user.id } }),
@@ -27,19 +31,36 @@ export async function GET() {
         where: { userId: user.id },
         orderBy: { createdAt: "desc" },
         take: 7,
-        select: { createdAt: true, type: true, importanceScore: true },
+        select: { createdAt: true, type: true, importanceScore: true, confidenceScore: true },
       }),
+      db.uploadedDocument.count({ where: { userId: user.id } }),
+      db.importedChat.count({ where: { userId: user.id } }),
+      db.contact.count({ where: { userId: user.id } }),
+      db.personaProfile.findUnique({ where: { userId: user.id } }),
     ]);
 
-    const memoriesByType = memoriesByTypeRaw.map((r) => ({ type: r.type, count: String(r._count.type) }));
-    const memoriesBySource = memoriesBySourceRaw.map((r) => ({ source: r.source, count: String(r._count.source) }));
-    const draftCounts = draftCountsRaw.map((r) => ({ status: r.status, count: String(r._count.status) }));
+    const memoriesByType = memoriesByTypeRaw.map(r => ({ type: r.type, count: String(r._count.type) }));
+    const memoriesBySource = memoriesBySourceRaw.map(r => ({ source: r.source, count: String(r._count.source) }));
+    const draftCounts = draftCountsRaw.map(r => ({ status: r.status, count: String(r._count.status) }));
 
     // Persona strength: weighted score out of 100
-    const typeBonus = Math.min(memoriesByType.length * 10, 40); // up to 40 pts for type diversity
-    const memoryBonus = Math.min(totalMemories * 2, 40); // up to 40 pts for memory count
-    const integrationBonus = Math.min(integrations.length * 10, 20); // up to 20 pts for integrations
+    const typeBonus = Math.min(memoriesByType.length * 10, 40);
+    const memoryBonus = Math.min(totalMemories * 2, 40);
+    const integrationBonus = Math.min(integrations.length * 10, 20);
     const personaStrength = Math.min(typeBonus + memoryBonus + integrationBonus, 100);
+
+    // Twin completeness: how much of the persona model is filled in
+    const twinCompleteness = personaProfile
+      ? Math.min(
+          Math.round(
+            (personaProfile.dataPointsAnalyzed / 50) * 40 +
+            (totalMemories / 20) * 30 +
+            (contactsCount / 5) * 15 +
+            (integrations.length / 3) * 15
+          ),
+          100
+        )
+      : 0;
 
     return NextResponse.json({
       totalMemories,
@@ -51,6 +72,12 @@ export async function GET() {
       integrations,
       recentMemories,
       personaStrength,
+      // New metrics
+      uploadedDocuments,
+      importedChats,
+      contactsCount,
+      twinCompleteness,
+      personaAnalyzedAt: personaProfile?.lastAnalyzedAt ?? null,
     });
   } catch (error) {
     console.error("[ANALYTICS_ERROR]", error);

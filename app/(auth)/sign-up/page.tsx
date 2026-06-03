@@ -105,6 +105,7 @@ export default function SignUpPage() {
               id="email"
               type="email"
               placeholder="name@example.com"
+              autoComplete="off"
               className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -120,6 +121,7 @@ export default function SignUpPage() {
                 id="password"
                 type={showPassword ? "text" : "password"}
                 placeholder="••••••••"
+                autoComplete="new-password"
                 className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 pr-10"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -143,6 +145,7 @@ export default function SignUpPage() {
                 id="confirmPassword"
                 type={showConfirmPassword ? "text" : "password"}
                 placeholder="••••••••"
+                autoComplete="new-password"
                 className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 pr-10"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}

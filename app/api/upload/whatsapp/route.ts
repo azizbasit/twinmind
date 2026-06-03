@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getOrCreateUser } from "@/lib/user-utils";
 import { parseWhatsAppExport, extractUserMessages, extractAllSenders } from "@/lib/whatsapp-parser";
 import { batchExtractMemories } from "@/lib/memory";
+import { db } from "@/lib/db";
 
 export async function POST(req: Request) {
   try {
@@ -18,12 +19,14 @@ export async function POST(req: Request) {
     const allMessages = parseWhatsAppExport(raw);
 
     if (allMessages.length === 0) {
-      return NextResponse.json({ error: "Could not parse any messages from this file. Make sure it is a WhatsApp exported .txt file." }, { status: 400 });
+      return NextResponse.json({
+        error: "Could not parse any messages. Make sure it is a WhatsApp exported .txt file.",
+      }, { status: 400 });
     }
 
     const senders = extractAllSenders(allMessages);
 
-    // If userName not provided, return senders list so user can pick
+    // Step 1: return senders list for user to identify themselves
     if (!userName) {
       return NextResponse.json({ needsSender: true, senders, totalMessages: allMessages.length });
     }
@@ -34,9 +37,31 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: `No messages found for sender "${userName}"` }, { status: 400 });
     }
 
-    // Join messages into a single text block for memory extraction
+    // Create raw data record
+    const importedChat = await db.importedChat.create({
+      data: {
+        userId: user.id,
+        platform: "whatsapp",
+        rawContent: raw.substring(0, 100000),
+        messageCount: allMessages.length,
+        yourMessageCount: userMessages.length,
+        status: "processing",
+      },
+    });
+
     const text = userMessages.join("\n");
-    const memoriesExtracted = await batchExtractMemories(user.id, text, "WhatsApp conversation");
+    const memoriesExtracted = await batchExtractMemories(
+      user.id,
+      text,
+      "WhatsApp conversation",
+      "WHATSAPP"
+    );
+
+    // Update record
+    await db.importedChat.update({
+      where: { id: importedChat.id },
+      data: { memoriesExtracted, status: "done", processedAt: new Date() },
+    });
 
     return NextResponse.json({
       success: true,

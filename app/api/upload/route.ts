@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOrCreateUser } from "@/lib/user-utils";
-import { decideAndStoreMemory } from "@/lib/memory";
+import { batchExtractMemories, decideAndStoreMemory } from "@/lib/memory";
+import { db } from "@/lib/db";
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
@@ -16,42 +17,76 @@ export async function POST(req: Request) {
       return new NextResponse("No file uploaded", { status: 400 });
     }
 
-    let text = "";
-    
-    console.log(`[UPLOAD] Processing file: ${file.name}, type: ${file.type}`);
+    const fileName = file.name;
+    const fileExt = fileName.split(".").pop()?.toLowerCase() ?? "txt";
 
-    if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
+    let text = "";
+
+    console.log(`[UPLOAD] Processing file: ${fileName}, type: ${file.type}`);
+
+    if (file.type === "application/pdf" || fileExt === "pdf") {
       try {
-        console.log("[UPLOAD] Detected PDF, converting to buffer...");
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
-        
-        console.log(`[UPLOAD] Buffer created, size: ${buffer.length} bytes. Parsing PDF...`);
-        // pdf-parse might need to be imported differently or handled carefully
         const data = await pdf(buffer);
         text = data.text;
-        console.log(`[UPLOAD] PDF parsed successfully, extracted ${text.length} characters.`);
+        console.log(`[UPLOAD] PDF parsed: ${text.length} chars`);
       } catch (pdfError: any) {
-        console.error("[UPLOAD] PDF Parsing failed:", pdfError);
-        return NextResponse.json({ 
-          success: false, 
-          error: `PDF Parsing failed: ${pdfError.message || "Unknown error"}` 
-        }, { status: 500 });
+        console.error("[UPLOAD] PDF parse failed:", pdfError);
+        return NextResponse.json({ success: false, error: `PDF parse failed: ${pdfError.message}` }, { status: 500 });
       }
     } else {
       text = await file.text();
     }
-    
-    // Split text into chunks if it's too large, but for MVP we'll process the whole thing
-    // or the first 5000 characters
-    const content = text.substring(0, 5000);
 
-    // Extract memories from the uploaded text
-    const result = await decideAndStoreMemory(user.id, `Uploaded document content: ${content}`);
+    const wordCount = text.split(/\s+/).filter(Boolean).length;
+
+    // Create the raw document record
+    const doc = await db.uploadedDocument.create({
+      data: {
+        userId: user.id,
+        fileName,
+        fileType: fileExt,
+        content: text.substring(0, 50000), // store up to 50k chars
+        wordCount,
+        status: "processing",
+      },
+    });
+
+    // Extract memories from the full text in chunks
+    const content = text.substring(0, 15000);
+    let memoriesExtracted = 0;
+
+    if (content.length > 800) {
+      memoriesExtracted = await batchExtractMemories(user.id, content, `Document "${fileName}"`, "DOCUMENT");
+    } else {
+      const result = await decideAndStoreMemory(
+        user.id,
+        `Document "${fileName}" content: ${content}`,
+        undefined,
+        "DOCUMENT"
+      );
+      if (result) memoriesExtracted = 1;
+    }
+
+    // Update document record with results
+    await db.uploadedDocument.update({
+      where: { id: doc.id },
+      data: {
+        memoriesExtracted,
+        status: "done",
+        processedAt: new Date(),
+      },
+    });
 
     return NextResponse.json({
       success: true,
-      message: result ? "Memory extracted from document" : "Document processed, no specific memories found",
+      fileName,
+      wordCount,
+      memoriesExtracted,
+      message: memoriesExtracted > 0
+        ? `Extracted ${memoriesExtracted} memories from "${fileName}"`
+        : `Document processed — no specific memories found in "${fileName}"`,
     });
   } catch (error) {
     console.error("[UPLOAD_ERROR]", error);

@@ -30,6 +30,11 @@ model User {
   verificationTokens  VerificationToken[]
   passwordResetTokens PasswordResetToken[]
   voiceSamples        VoiceSample[]
+  uploadedDocuments   UploadedDocument[]
+  importedChats       ImportedChat[]
+  contacts            Contact[]
+  personaProfile      PersonaProfile?
+  personaSnapshots    PersonaSnapshot[]
 
   @@index([email])
 }
@@ -48,13 +53,13 @@ model Permission {
 }
 
 model Session {
-  id           String   @id @default(uuid())
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userAgent    String?
-  ipAddress    String?
-  expiresAt    DateTime
-  createdAt    DateTime @default(now())
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAgent String?
+  ipAddress String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 
   @@index([userId])
 }
@@ -111,7 +116,7 @@ model Message {
   id             String       @id @default(uuid())
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  role           String       // "user" | "assistant"
+  role           String // "user" | "assistant"
   content        String       @db.Text
   createdAt      DateTime     @default(now())
 
@@ -131,11 +136,18 @@ enum MemorySource {
   CHAT
   DOCUMENT
   WHATSAPP
+  TELEGRAM
+  SLACK
+  DISCORD
+  EMAIL
   VOICE
   SOCIAL
   MANUAL
 }
 
+// PERMANENT = long-term stable (skills, values, career)
+// SEMI_PERMANENT = evolving (goals, interests, projects)
+// TEMPORARY = short-lived (tasks, plans, event-specific)
 model Memory {
   id              String       @id @default(uuid())
   userId          String
@@ -145,10 +157,16 @@ model Memory {
   type            MemoryType
   source          MemorySource @default(CHAT)
   importanceScore Int          @default(1)
+  confidenceScore Float        @default(0.6)
+  permanence      String       @default("SEMI_PERMANENT") // PERMANENT | SEMI_PERMANENT | TEMPORARY
+  sourceContext   String?      @db.Text
+  pinned          Boolean      @default(false)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
   @@index([userId])
+  @@index([userId, type])
+  @@index([userId, pinned])
 }
 
 enum DraftStatus {
@@ -159,16 +177,16 @@ enum DraftStatus {
 }
 
 model PersonaDraft {
-  id           String      @id @default(uuid())
-  userId       String
-  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  platform     String      // "linkedin", "twitter", "instagram"
-  content      String      @db.Text
-  topic        String?
-  status       DraftStatus @default(PENDING)
-  postedAt     DateTime?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  id        String      @id @default(uuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform  String // "linkedin", "twitter", "instagram"
+  content   String      @db.Text
+  topic     String?
+  status    DraftStatus @default(PENDING)
+  postedAt  DateTime?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
 
   @@index([userId])
   @@index([userId, status])
@@ -186,18 +204,172 @@ model VoiceSample {
 }
 
 model Integration {
-  id            String   @id @default(uuid())
-  userId        String
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider      String   // "linkedin", "twitter", "instagram", "facebook"
-  accessToken   String   @db.Text
-  refreshToken  String?  @db.Text
-  tokenSecret   String?  @db.Text
-  expiresAt     DateTime?
-  profileData   String?  @db.Text // JSON string with profile info
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider     String // "linkedin", "twitter", "instagram", "facebook"
+  accessToken  String    @db.Text
+  refreshToken String?   @db.Text
+  tokenSecret  String?   @db.Text
+  expiresAt    DateTime?
+  profileData  String?   @db.Text // JSON
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@unique([userId, provider])
+  @@index([userId])
+}
+
+// ─── Raw Data Layer ───────────────────────────────────────────────────────────
+
+model UploadedDocument {
+  id                String    @id @default(uuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fileName          String
+  fileType          String // pdf, txt, md, docx
+  content           String    @db.LongText
+  wordCount         Int       @default(0)
+  memoriesExtracted Int       @default(0)
+  status            String    @default("pending") // pending | processing | done | failed
+  processedAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+model ImportedChat {
+  id                String    @id @default(uuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform          String // whatsapp, telegram, slack, discord, messenger, email
+  rawContent        String    @db.LongText
+  messageCount      Int       @default(0)
+  yourMessageCount  Int       @default(0)
+  memoriesExtracted Int       @default(0)
+  status            String    @default("pending") // pending | processing | done | failed
+  processedAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+// ─── Relationship Intelligence ────────────────────────────────────────────────
+
+model Contact {
+  id                 String    @id @default(uuid())
+  userId             String
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name               String
+  aliases            String?   @db.Text // JSON array of alternate names
+  relationshipType   String?   // friend, family, colleague, client, mentor, other
+  importanceScore    Float     @default(0.5) // 0.0 – 1.0
+  interactionCount   Int       @default(0)
+  lastInteractionAt  DateTime?
+  sentimentScore     Float     @default(0.0) // -1.0 negative, 0 neutral, +1.0 positive
+  communicationNotes String?   @db.Text // how user writes/speaks about this person
+  userCorrected      Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+// ─── Persona Layer ────────────────────────────────────────────────────────────
+
+// Live quantified persona profile (one per user, updated incrementally)
+model PersonaProfile {
+  id   String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Communication Style (0–100)
+  formalityScore      Int @default(50)
+  casualnessScore     Int @default(50)
+  humorScore          Int @default(50)
+  directnessScore     Int @default(50)
+  technicalDepthScore Int @default(50)
+  avgMessageLength    Int @default(50) // 0=very short, 100=very long
+
+  // Thinking Style (0–100)
+  analyticalScore Int @default(50)
+  strategicScore  Int @default(50)
+  creativeScore   Int @default(50)
+  emotionalScore  Int @default(50)
+
+  // Decision Style (0–100)
+  dataOrientedScore  Int @default(50)
+  intuitiveScore     Int @default(50)
+  riskToleranceScore Int @default(50)
+  decisionSpeedScore Int @default(50)
+
+  // Work Style (0–100)
+  plannerScore    Int @default(50)
+  builderScore    Int @default(50)
+  researcherScore Int @default(50)
+  creatorScore    Int @default(50)
+  managerScore    Int @default(50)
+
+  // Social Style (0–100)
+  introversionScore  Int @default(50)
+  extroversionScore  Int @default(50)
+  leadershipScore    Int @default(50)
+  collaborationScore Int @default(50)
+
+  dataPointsAnalyzed Int       @default(0)
+  lastAnalyzedAt     DateTime?
+  summaryText        String?   @db.Text // GPT-generated narrative
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum SnapshotType {
+  WEEKLY
+  MONTHLY
+  MANUAL
+}
+
+// Versioned persona snapshots — created weekly or on user request
+model PersonaSnapshot {
+  id           String       @id @default(uuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  version      Int
+  snapshotType SnapshotType @default(WEEKLY)
+
+  formalityScore      Int
+  casualnessScore     Int
+  humorScore          Int
+  directnessScore     Int
+  technicalDepthScore Int
+  avgMessageLength    Int
+  analyticalScore     Int
+  strategicScore      Int
+  creativeScore       Int
+  emotionalScore      Int
+  dataOrientedScore   Int
+  intuitiveScore      Int
+  riskToleranceScore  Int
+  decisionSpeedScore  Int
+  plannerScore        Int
+  builderScore        Int
+  researcherScore     Int
+  creatorScore        Int
+  managerScore        Int
+  introversionScore   Int
+  extroversionScore   Int
+  leadershipScore     Int
+  collaborationScore  Int
+
+  dataPointsAnalyzed Int    @default(0)
+  summaryText        String? @db.Text
+  changesFromPrev    String? @db.Text // JSON describing key changes
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, version])
   @@index([userId])
 }
