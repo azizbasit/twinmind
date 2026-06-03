@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOrCreateUser } from "@/lib/user-utils";
 import { db } from "@/lib/db";
+import { handleApiError } from "@/lib/api-error";
 
 export async function GET() {
   try {
@@ -80,7 +81,6 @@ export async function GET() {
       personaAnalyzedAt: personaProfile?.lastAnalyzedAt ?? null,
     });
   } catch (error) {
-    console.error("[ANALYTICS_ERROR]", error);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return handleApiError(error, );
   }
 }

@@ -4,6 +4,7 @@ import { searchMemories } from "@/lib/memory";
 import { getUserPersonality } from "@/lib/personality";
 import { openai } from "@/lib/openai";
 import { db } from "@/lib/db";
+import { handleApiError } from "@/lib/api-error";
 
 export async function POST(req: Request) {
   try {
@@ -68,8 +69,7 @@ RULES:
 
     return NextResponse.json({ draft });
   } catch (error) {
-    console.error("[PERSONA_DRAFT_ERROR]", error);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return handleApiError(error, );
   }
 }
 

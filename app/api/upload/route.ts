@@ -3,6 +3,7 @@ import { getOrCreateUser } from "@/lib/user-utils";
 import { batchExtractMemories, decideAndStoreMemory } from "@/lib/memory";
 import { db } from "@/lib/db";
 import { createRequire } from "module";
+import { handleApiError } from "@/lib/api-error";
 
 const require = createRequire(import.meta.url);
 const pdf = require("pdf-parse");
@@ -89,7 +90,6 @@ export async function POST(req: Request) {
         : `Document processed — no specific memories found in "${fileName}"`,
     });
   } catch (error) {
-    console.error("[UPLOAD_ERROR]", error);
-    return new NextResponse("Internal Error", { status: 500 });
+    return handleApiError(error, );
   }
 }

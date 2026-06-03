@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOrCreateUser } from "@/lib/user-utils";
 import { db } from "@/lib/db";
+import { handleApiError } from "@/lib/api-error";
 
 // GET /api/persona/profile — return current profile (or null if not yet analyzed)
 export async function GET() {
@@ -9,8 +10,7 @@ export async function GET() {
     const profile = await db.personaProfile.findUnique({ where: { userId: user.id } });
     return NextResponse.json({ profile });
   } catch (error) {
-    console.error("[PERSONA_PROFILE_GET]", error);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return handleApiError(error, );
   }
 }
 
@@ -24,7 +24,6 @@ export async function POST() {
     const profile = await db.personaProfile.findUnique({ where: { userId: user.id } });
     return NextResponse.json({ profile });
   } catch (error) {
-    console.error("[PERSONA_PROFILE_POST]", error);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return handleApiError(error, );
   }
 }

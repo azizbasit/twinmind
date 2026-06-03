@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOrCreateUser } from "@/lib/user-utils";
 import { db } from "@/lib/db";
+import { handleApiError } from "@/lib/api-error";
 
 // POST /api/persona/analyze — run full analysis pipeline (async-friendly)
 // Body: { snapshot?: boolean }  — if true, forces a manual snapshot
@@ -29,7 +30,6 @@ export async function POST(req: Request) {
     const profile = await db.personaProfile.findUnique({ where: { userId: user.id } });
     return NextResponse.json({ success: true, profile });
   } catch (error) {
-    console.error("[PERSONA_ANALYZE]", error);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return handleApiError(error, );
   }
 }

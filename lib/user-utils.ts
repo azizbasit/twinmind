@@ -1,14 +1,15 @@
-import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth/get-user";
+
+export class AuthError extends Error {
+  readonly status = 401;
+  constructor() {
+    super("Unauthorized");
+    this.name = "AuthError";
+  }
+}
 
 export async function getOrCreateUser() {
   const user = await getCurrentUser();
-
-  if (!user) {
-    throw new Error("Unauthorized");
-  }
-
-  // With custom auth, the user is already in the DB and verified.
-  // We just return the user object we got from getCurrentUser.
+  if (!user) throw new AuthError();
   return user;
 }

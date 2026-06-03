@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { getOrCreateUser } from "@/lib/user-utils";
 import { searchMemories, decideAndStoreMemory } from "@/lib/memory";
 import { getUserPersonality } from "@/lib/personality";
+import { buildDiscoveryHint } from "@/lib/conversation-guide";
 import { openai } from "@/lib/openai";
 import { db } from "@/lib/db";
 import { cache } from "@/lib/cache";
+import { handleApiError } from "@/lib/api-error";
 
 // Build a persona-aware section for the system prompt from stored profile scores
 function buildPersonaSection(profile: any | null, personalityStyle: string): string {
@@ -61,19 +63,20 @@ export async function POST(req: Request) {
     const personaSection = buildPersonaSection(personaProfile, personalityStyle);
     const relationshipSection = buildRelationshipSection(importantContacts);
 
-    const systemPrompt = `You are the Personal AI Digital Twin of the user.
-Your goal is to represent them accurately — thinking, reasoning, and responding exactly as they would.
+    // Build a tiny, targeted discovery hint (30 tokens max, empty when profile is mature)
+    const discoverySection = buildDiscoveryHint(
+      personaProfile as Record<string, number> | null,
+      personaProfile?.dataPointsAnalyzed ?? 0
+    );
 
-${personaSection}
-
-${memoryContext}
-${relationshipSection ? `\n${relationshipSection}` : ""}
-
-RESPONSE PRINCIPLES:
-- Mirror the user's communication style (formality, humor, directness, message length)
-- Ground responses in their known preferences, goals, and values from memory
-- When referencing relationships, match the user's emotional tone toward each person
-- Be authentic to their personality — not generic or overly helpful`.trim();
+    const systemPrompt = [
+      "You are the Personal AI Digital Twin of the user. Understand them deeply through conversation and represent them accurately.",
+      personaSection,
+      memoryContext,
+      relationshipSection,
+      discoverySection,
+      "Be genuinely curious. Mirror their style. Ask one question at a time. Feel like a real conversation.",
+    ].filter(Boolean).join("\n\n").trim();
 
     // Get or create conversation
     let currentConversationId = conversationId;
@@ -188,7 +191,6 @@ RESPONSE PRINCIPLES:
     cache.set(cacheKey, result, 5 * 60 * 1000);
     return NextResponse.json(result);
   } catch (error) {
-    console.error("[CHAT_ERROR]", error);
-    return new NextResponse("Internal Server Error", { status: 500 });
+    return handleApiError(error, );
   }
 }

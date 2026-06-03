@@ -2,68 +2,52 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { verifyAccessToken } from "@/lib/auth/token";
 
-const publicRoutes = ["/", "/sign-in", "/sign-up", "/api/auth/(.*)"];
+const PUBLIC_PAGES = ["/", "/sign-in", "/sign-up", "/forgot-password", "/reset-password"];
+const PUBLIC_API_PREFIX = "/api/auth/";
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Check if it's a public route
-  const isPublicRoute = publicRoutes.some((route) => {
-    if (route.includes("(.*)")) {
-      const regex = new RegExp(`^${route.replace("(.*)", ".*")}$`);
-      return regex.test(pathname);
-    }
-    return pathname === route;
-  });
+  // Always allow public pages and auth API routes
+  if (PUBLIC_PAGES.includes(pathname) || pathname.startsWith(PUBLIC_API_PREFIX)) {
+    return NextResponse.next();
+  }
 
-  const accessToken = req.cookies.get("access_token")?.value;
+  const accessToken  = req.cookies.get("access_token")?.value;
   const refreshToken = req.cookies.get("refresh_token")?.value;
 
-  // Verify access token if it exists
-  let isValidAccessToken = false;
+  // Valid access token → pass through
   if (accessToken) {
     const payload = await verifyAccessToken(accessToken);
-    if (payload) {
-      isValidAccessToken = true;
-    }
+    if (payload) return NextResponse.next();
   }
 
-  // If the user is logged in (has valid access token) and trying to access sign-in/sign-up, redirect to dashboard
-  if (isValidAccessToken && (pathname === "/sign-in" || pathname === "/sign-up")) {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
-  }
-
-  if (isPublicRoute) {
+  // No valid access token — check if at least a refresh token exists
+  if (refreshToken) {
+    // Has refresh token: pass through.
+    // - For page routes: dashboard layout will redirect to /sign-in (user re-logs in,
+    //   or AuthProvider handles refresh on the next client-side API call).
+    // - For API routes: API returns 401, AuthProvider intercepts, calls /api/auth/refresh,
+    //   retries the request, user never notices.
     return NextResponse.next();
   }
 
-  // If no valid access token and no refresh token, redirect to sign-in
-  if (!isValidAccessToken && !refreshToken) {
-    // Avoid redirect loop if already on sign-in
-    if (pathname === "/sign-in") {
-      return NextResponse.next();
-    }
-    return NextResponse.redirect(new URL("/sign-in", req.url));
+  // Completely unauthenticated (no tokens at all)
+  if (pathname.startsWith("/api/")) {
+    // API routes get JSON 401 — not an HTML redirect
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // If we have a refresh token but no valid access token, we allow the request to proceed.
-  // The client-side or server-side layout will handle the refresh if needed.
-  // This prevents the redirect loop because we don't redirect back to /dashboard from /sign-in
-  // unless we have a VALID access token.
-  if (!isValidAccessToken && refreshToken) {
-    return NextResponse.next();
-  }
-
-  return NextResponse.next();
+  // Page routes → redirect to sign-in
+  return NextResponse.redirect(new URL("/sign-in", req.url));
 }
 
-// Export as both named 'middleware' (for Next.js convention) and 'proxy' (for the new convention)
 export { proxy as middleware };
 export default proxy;
 
 export const config = {
   matcher: [
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    '/(api|trpc)(.*)',
+    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    "/(api|trpc)(.*)",
   ],
 };

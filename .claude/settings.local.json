@@ -30,7 +30,8 @@
       "Bash(node -e 'const { PrismaClient } = require\\('\\\\''./node_modules/.prisma/client'\\\\''\\); const db = new PrismaClient\\(\\); console.log\\('\\\\''personaSnapshot:'\\\\'', typeof db.personaSnapshot\\); console.log\\('\\\\''personaProfile:'\\\\'', typeof db.personaProfile\\); console.log\\('\\\\''contact:'\\\\'', typeof db.contact\\); db.$disconnect\\(\\);')",
       "Bash(node -e \"const pc = require\\('./node_modules/.prisma/client'\\); console.log\\('SnapshotType:', pc.SnapshotType\\); console.log\\('MemorySource keys:', Object.keys\\(pc\\).filter\\(k => k.includes\\('Snapshot'\\) || k.includes\\('Memory'\\)\\)\\)\")",
       "Bash(node -e ' *)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/api/persona/snapshots)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/api/persona/snapshots)",
+      "PowerShell($job = Start-Job -ScriptBlock { Set-Location \"c:\\\\laragon\\\\www\\\\twinmind\"; npm run dev 2>&1 }; Start-Sleep -Seconds 12; Receive-Job $job; Stop-Job $job; Remove-Job $job)"
     ],
     "additionalDirectories": [
       "c:\\laragon\\www\\twinmind\\app\\api\\relationships"

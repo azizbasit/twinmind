@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOrCreateUser } from "@/lib/user-utils";
 import { db } from "@/lib/db";
+import { handleApiError } from "@/lib/api-error";
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   try {

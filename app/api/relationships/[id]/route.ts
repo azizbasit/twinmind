@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOrCreateUser } from "@/lib/user-utils";
 import { db } from "@/lib/db";
+import { handleApiError } from "@/lib/api-error";
 
 // GET /api/relationships/[id]
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -11,8 +12,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     if (!contact) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json({ contact });
   } catch (error) {
-    console.error("[RELATIONSHIP_GET_ONE]", error);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return handleApiError(error, );
   }
 }
 
@@ -39,8 +39,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     return NextResponse.json({ contact: updated });
   } catch (error) {
-    console.error("[RELATIONSHIP_PATCH]", error);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return handleApiError(error, );
   }
 }
 
@@ -54,7 +53,6 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     await db.contact.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[RELATIONSHIP_DELETE]", error);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return handleApiError(error, );
   }
 }

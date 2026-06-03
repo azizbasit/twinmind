@@ -3,6 +3,7 @@ import { getOrCreateUser } from "@/lib/user-utils";
 import { parseWhatsAppExport, extractUserMessages, extractAllSenders } from "@/lib/whatsapp-parser";
 import { batchExtractMemories } from "@/lib/memory";
 import { db } from "@/lib/db";
+import { handleApiError } from "@/lib/api-error";
 
 export async function POST(req: Request) {
   try {
@@ -70,7 +71,6 @@ export async function POST(req: Request) {
       memoriesExtracted,
     });
   } catch (error) {
-    console.error("[UPLOAD_WHATSAPP_ERROR]", error);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return handleApiError(error, );
   }
 }
