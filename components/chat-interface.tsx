@@ -27,6 +27,7 @@ export function ChatInterface() {
   const [startersLoading, setStartersLoading] = useState(true);
   const [usedStarterIds, setUsedStarterIds] = useState<string[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
@@ -126,10 +127,10 @@ export function ChatInterface() {
   };
 
   const pickStarter = (starter: Starter) => {
-    const newUsed = [...usedStarterIds, starter.id];
-    setUsedStarterIds(newUsed);
-    // Send the starter text as a user message directly
-    sendMessage(starter.text);
+    setUsedStarterIds(prev => [...prev, starter.id]);
+    // Show question as a bot message, wait for the user to answer
+    setMessages([{ role: "assistant", content: starter.text }]);
+    setTimeout(() => inputRef.current?.focus(), 50);
   };
 
   const refreshStarters = () => {
@@ -305,6 +306,7 @@ export function ChatInterface() {
             )}
           </button>
           <input
+            ref={inputRef}
             className="flex-1 bg-slate-100 dark:bg-slate-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-violet-500 outline-none"
             placeholder={isTranscribing ? "Transcribing…" : "Say anything — or pick a topic above…"}
             value={input}

@@ -155,35 +155,42 @@ export async function decideAndStoreMemory(
   source: MemorySource = "CHAT"
 ) {
   try {
-    const prompt = `Analyze the following interaction and decide if it contains meaningful long-term information about the user.
+    const prompt = `Analyze the following conversation exchange and extract the single most important long-term fact about the user, if one exists.
 
-Store information about:
-- Personality traits and communication style
-- Preferences (likes, dislikes)
-- Key knowledge, skills, or expertise
-- Behavioral patterns
-- Goals or aspirations
-- Significant life events
-- Important relationships
+TYPE GUIDE — pick the most specific match:
+- PERSONALITY  → character traits, communication style, how they come across (e.g. "is direct and concise", "uses humor to deflect")
+- PREFERENCE   → likes, dislikes, opinions on things (e.g. "prefers async communication", "dislikes micromanagement")
+- KNOWLEDGE    → career, life background, skills, ongoing situations, people in their life (e.g. "runs a startup called X with a co-founder Ali", "is a software engineer at Y", "has a sister in London")
+- BEHAVIOR     → recurring patterns in how they act or think (e.g. "tends to overthink decisions", "procrastinates on admin tasks")
+- GOALS        → aspirations, ambitions, things they are working toward (e.g. "wants to raise a seed round by Q3", "learning Spanish")
+- EVENTS       → specific completed past events or milestones (e.g. "graduated from MIT in 2019", "moved to Dubai last year", "just closed a deal with X")
+
+Rules:
+- Use KNOWLEDGE for any ongoing life fact (job, business, relationships, living situation)
+- Use EVENTS only for a specific time-anchored past occurrence
+- Never pick EVENTS for a current ongoing situation
+- Write the memory as a direct fact — no "the user says", no "it seems"
+- If nothing meaningful was disclosed, return shouldStore: false
 
 Assign permanence:
-- PERMANENT: stable long-term facts (career, core values, skills, identity)
-- SEMI_PERMANENT: evolving things (goals, active projects, interests)
-- TEMPORARY: short-lived info (current tasks, event-specific plans)
+- PERMANENT: stable long-term facts (core identity, skills, career path)
+- SEMI_PERMANENT: evolving things (current projects, active goals, relationships)
+- TEMPORARY: short-lived info (tasks for this week, upcoming one-off plans)
 
 If worth storing:
 {
   "shouldStore": true,
-  "content": "A clear, self-contained memory (not referencing 'the user says' — state the fact directly)",
+  "content": "Direct factual statement about the user",
   "type": "PERSONALITY" | "PREFERENCE" | "KNOWLEDGE" | "BEHAVIOR" | "GOALS" | "EVENTS",
   "importanceScore": 1-10,
   "permanence": "PERMANENT" | "SEMI_PERMANENT" | "TEMPORARY",
-  "sourceContext": "Brief note on why this was stored"
+  "sourceContext": "One-line reason this was stored"
 }
 If not worth storing: { "shouldStore": false }
 
-${context ? `CONTEXT:\n${context}\n` : ""}
-MESSAGE: "${content}"`;
+${context ? `RECENT CONTEXT:\n${context}\n` : ""}
+EXCHANGE:
+${content}`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini", // Layer 2: cost-efficient for routine extraction

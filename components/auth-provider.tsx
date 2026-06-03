@@ -2,9 +2,10 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import axios from "axios";
 
-// Intercepts fetch globally.
-// On 401: tries /api/auth/refresh once, retries the original request.
+// Intercepts both window.fetch and axios globally.
+// On 401: tries /api/auth/refresh once (deduplicated), retries the original request.
 // If refresh also fails → redirects to /sign-in.
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -13,37 +14,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const originalFetch = window.fetch;
     let refreshing: Promise<boolean> | null = null;
 
-    window.fetch = async (input, init) => {
-      const res = await originalFetch(input, init);
-
-      if (res.status !== 401) return res;
-
-      // Don't intercept auth endpoints themselves
-      const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
-      if (url.includes("/api/auth/")) return res;
-
-      // Try refresh exactly once (deduplicate parallel calls)
+    const doRefresh = () => {
       if (!refreshing) {
         refreshing = originalFetch("/api/auth/refresh", { method: "POST" })
           .then(r => r.ok)
           .catch(() => false)
           .finally(() => { refreshing = null; });
       }
+      return refreshing;
+    };
 
-      const refreshed = await refreshing;
+    // ── fetch interceptor ─────────────────────────────────────────────────
+    window.fetch = async (input, init) => {
+      const res = await originalFetch(input, init);
+      if (res.status !== 401) return res;
 
-      if (refreshed) {
-        // Retry the original request with the new cookie
-        return originalFetch(input, init);
-      }
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
+      if (url.includes("/api/auth/")) return res;
 
-      // Refresh failed — session truly expired, go to sign-in
+      const refreshed = await doRefresh();
+      if (refreshed) return originalFetch(input, init);
       router.push("/sign-in");
       return res;
     };
 
+    // ── axios interceptor ─────────────────────────────────────────────────
+    const axiosId = axios.interceptors.response.use(
+      res => res,
+      async error => {
+        const status = error?.response?.status;
+        const url: string = error?.config?.url ?? "";
+        if (status !== 401 || url.includes("/api/auth/")) throw error;
+
+        const refreshed = await doRefresh();
+        if (refreshed) return axios.request(error.config);
+        router.push("/sign-in");
+        throw error;
+      }
+    );
+
     return () => {
       window.fetch = originalFetch;
+      axios.interceptors.response.eject(axiosId);
     };
   }, [router]);
 

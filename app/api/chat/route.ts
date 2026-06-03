@@ -3,6 +3,7 @@ import { getOrCreateUser } from "@/lib/user-utils";
 import { searchMemories, decideAndStoreMemory } from "@/lib/memory";
 import { getUserPersonality } from "@/lib/personality";
 import { buildDiscoveryHint } from "@/lib/conversation-guide";
+import { extractContactsIncremental } from "@/lib/relationship-engine";
 import { openai } from "@/lib/openai";
 import { db } from "@/lib/db";
 import { cache } from "@/lib/cache";
@@ -142,10 +143,14 @@ export async function POST(req: Request) {
               ],
             });
 
-            // Async memory extraction — never blocks the user
+            // Async background processing — never blocks the user
             const chatContext = history.slice(-3).map(m => `${m.role}: ${m.content}`).join("\n");
-            decideAndStoreMemory(user.id, message, chatContext, "CHAT").catch(err =>
+            const exchange = `User: ${message}\nAssistant: ${fullResponse}`;
+            decideAndStoreMemory(user.id, exchange, chatContext, "CHAT").catch(err =>
               console.error("Memory extraction error:", err)
+            );
+            extractContactsIncremental(user.id).catch(err =>
+              console.error("Contact extraction error:", err)
             );
           } catch (err) {
             controller.error(err);
@@ -183,8 +188,12 @@ export async function POST(req: Request) {
     });
 
     const chatContext = history.slice(-3).map(m => `${m.role}: ${m.content}`).join("\n");
-    decideAndStoreMemory(user.id, message, chatContext, "CHAT").catch(err =>
+    const exchange = `User: ${message}\nAssistant: ${assistantMessage}`;
+    decideAndStoreMemory(user.id, exchange, chatContext, "CHAT").catch(err =>
       console.error("Memory extraction error:", err)
+    );
+    extractContactsIncremental(user.id).catch(err =>
+      console.error("Contact extraction error:", err)
     );
 
     const result = { content: assistantMessage, conversationId: currentConversationId };

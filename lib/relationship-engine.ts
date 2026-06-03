@@ -106,14 +106,14 @@ export async function extractContactsIncremental(userId: string): Promise<void> 
     select: { content: true },
   });
 
-  if (messages.length < 5) return;
+  if (messages.length === 0) return;
 
   const texts = messages.map(m => m.content);
 
-  // Layer 1: rule-based frequency detection
+  // Layer 1: rule-based frequency detection — threshold 1 so a single mention reaches the AI
   const nameCounts = countNameMentions(texts);
   const frequentNames = [...nameCounts.entries()]
-    .filter(([, count]) => count >= 2)
+    .filter(([, count]) => count >= 1)
     .sort((a, b) => b[1] - a[1])
     .map(([name]) => name);
 
