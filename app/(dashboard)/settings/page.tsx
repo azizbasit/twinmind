@@ -27,7 +27,7 @@ const AVAILABLE_INTEGRATIONS = [
     textColor: "text-blue-600",
     borderColor: "border-blue-200",
     bgLight: "bg-blue-50",
-    available: true,
+    available: false,
   },
   {
     id: "facebook",
